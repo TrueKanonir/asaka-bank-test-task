@@ -1,0 +1,83 @@
+version: "3.7"
+
+services:
+  php:
+    build:
+      context: ./docker/php
+    container_name: ${APP_NAME}_php
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www
+    networks:
+      - app
+    depends_on:
+      - postgres
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: ${APP_NAME}_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - app
+    healthcheck:
+      test: wget --quiet --tries=1 --spider http://localhost || exit 1z
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      - php
+
+  postgres:
+    image: postgres:13-alpine
+    container_name: ${APP_NAME}_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    networks:
+      - app
+    ports:
+      - "5432:5432"
+
+  adminer:
+    image: adminer:latest
+    container_name: ${APP_NAME}_adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - app
+    ports:
+      - 8080:8080
+
+  redis:
+    image: redis:6-alpine
+    container_name: ${APP_NAME}_redis
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgresdata:
+    driver: local
+  redisdata:
+    driver: local
+
+networks:
+  app:
